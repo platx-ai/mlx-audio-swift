@@ -46,7 +46,8 @@ extension Qwen3ASRModel: STTGenerationModel {
             temperature: generationParameters.temperature,
             language: generationParameters.language,
             chunkDuration: generationParameters.chunkDuration,
-            minChunkDuration: generationParameters.minChunkDuration
+            minChunkDuration: generationParameters.minChunkDuration,
+            initialPrompt: generationParameters.initialPrompt
         )
     }
 
@@ -60,7 +61,8 @@ extension Qwen3ASRModel: STTGenerationModel {
             temperature: generationParameters.temperature,
             language: generationParameters.language,
             chunkDuration: generationParameters.chunkDuration,
-            minChunkDuration: generationParameters.minChunkDuration
+            minChunkDuration: generationParameters.minChunkDuration,
+            initialPrompt: generationParameters.initialPrompt
         )
     }
 }
@@ -1029,7 +1031,7 @@ public class Qwen3ASRModel: Module {
 
     // MARK: - Prompt Building
 
-    public func buildPrompt(numAudioTokens: Int, language: String = "English") -> MLXArray {
+    public func buildPrompt(numAudioTokens: Int, language: String = "English", initialPrompt: String? = nil) -> MLXArray {
         guard let tokenizer = tokenizer else {
             fatalError("Tokenizer not loaded")
         }
@@ -1038,7 +1040,14 @@ public class Qwen3ASRModel: Module {
         let supportedLower = Dictionary(uniqueKeysWithValues: supported.map { ($0.lowercased(), $0) })
         let langName = supportedLower[language.lowercased()] ?? language
 
-        let prompt = "<|im_start|>system\n<|im_end|>\n"
+        var systemContent = ""
+        if let initialPrompt, !initialPrompt.isEmpty {
+            // Place hotword hints in the system prompt to bias decoding
+            // without disrupting the assistant's <asr_text> generation.
+            systemContent = "The following terms may appear in the audio: \(initialPrompt)"
+        }
+
+        let prompt = "<|im_start|>system\n\(systemContent)<|im_end|>\n"
             + "<|im_start|>user\n<|audio_start|>"
             + String(repeating: "<|audio_pad|>", count: numAudioTokens)
             + "<|audio_end|><|im_end|>\n"
@@ -1062,7 +1071,8 @@ public class Qwen3ASRModel: Module {
         audio: MLXArray,
         maxTokens: Int,
         temperature: Float,
-        language: String
+        language: String,
+        initialPrompt: String? = nil
     ) -> (text: String, promptTokens: Int, generationTokens: Int) {
         guard let tokenizer = tokenizer else {
             fatalError("Tokenizer not loaded")
@@ -1071,7 +1081,7 @@ public class Qwen3ASRModel: Module {
         let eosTokenIds = [151645, 151643]
 
         let (inputFeatures, featureAttentionMask, numAudioTokens) = preprocessAudio(audio)
-        let inputIds = buildPrompt(numAudioTokens: numAudioTokens, language: language)
+        let inputIds = buildPrompt(numAudioTokens: numAudioTokens, language: language, initialPrompt: initialPrompt)
         let promptTokenCount = inputIds.dim(1)
 
         let audioFeatures = getAudioFeatures(inputFeatures, featureAttentionMask: featureAttentionMask)
@@ -1119,13 +1129,16 @@ public class Qwen3ASRModel: Module {
     // MARK: - Generation
 
     /// Generate transcription from audio, automatically chunking long audio at low-energy boundaries.
+    /// - Parameter initialPrompt: Optional text prefix appended after `<asr_text>` to bias decoding
+    ///   toward specific terms (hotwords, proper nouns, etc.).
     public func generate(
         audio: MLXArray,
         maxTokens: Int = 8192,
         temperature: Float = 0.0,
         language: String = "English",
         chunkDuration: Float = 1200.0,
-        minChunkDuration: Float = 1.0
+        minChunkDuration: Float = 1.0,
+        initialPrompt: String? = nil
     ) -> STTOutput {
         let startTime = Date()
 
@@ -1152,7 +1165,8 @@ public class Qwen3ASRModel: Module {
                 audio: chunkAudio,
                 maxTokens: remainingTokens,
                 temperature: temperature,
-                language: language
+                language: language,
+                initialPrompt: initialPrompt
             )
 
             allTexts.append(result.text)
@@ -1193,7 +1207,8 @@ public class Qwen3ASRModel: Module {
         temperature: Float = 0.0,
         language: String = "English",
         chunkDuration: Float = 1200.0,
-        minChunkDuration: Float = 1.0
+        minChunkDuration: Float = 1.0,
+        initialPrompt: String? = nil
     ) -> AsyncThrowingStream<STTGeneration, Error> {
         let sendableModel = UncheckedSendableBox(self)
         let sendableAudio = UncheckedSendableBox(audio)
@@ -1228,7 +1243,7 @@ public class Qwen3ASRModel: Module {
 
                         // Preprocess this chunk
                         let (inputFeatures, featureAttentionMask, numAudioTokens) = model.preprocessAudio(chunkAudio)
-                        let inputIds = model.buildPrompt(numAudioTokens: numAudioTokens, language: language)
+                        let inputIds = model.buildPrompt(numAudioTokens: numAudioTokens, language: language, initialPrompt: initialPrompt)
                         let promptTokenCount = inputIds.dim(1)
                         totalPromptTokens += promptTokenCount
 

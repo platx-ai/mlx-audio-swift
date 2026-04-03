@@ -470,7 +470,8 @@ public class StreamingInferenceSession: @unchecked Sendable {
 
         let inputIds = model.buildPrompt(
             numAudioTokens: numAudioTokens,
-            language: params.config.language
+            language: params.config.language,
+            initialPrompt: params.config.initialPrompt
         )
 
         let embeds = model.model.embedTokens(inputIds)
@@ -942,7 +943,8 @@ public class StreamingInferenceSession: @unchecked Sendable {
 
         let inputIds = model.buildPrompt(
             numAudioTokens: numAudioTokens,
-            language: config.language
+            language: config.language,
+            initialPrompt: config.initialPrompt
         )
 
         let embeds = model.model.embedTokens(inputIds)

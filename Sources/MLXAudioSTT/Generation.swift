@@ -9,6 +9,10 @@ public struct STTGenerateParameters: Sendable {
     public let language: String
     public let chunkDuration: Float
     public let minChunkDuration: Float
+    /// Optional initial prompt to guide decoding (e.g. hotword hints for ASR).
+    /// For Qwen3ASR, this text is appended after `<asr_text>` as a prefix that
+    /// the decoder continues from, biasing it toward the specified terms.
+    public let initialPrompt: String?
 
     public init(
         maxTokens: Int = 8192,
@@ -18,7 +22,8 @@ public struct STTGenerateParameters: Sendable {
         verbose: Bool = false,
         language: String = "English",
         chunkDuration: Float = 1200.0,
-        minChunkDuration: Float = 1.0
+        minChunkDuration: Float = 1.0,
+        initialPrompt: String? = nil
     ) {
         self.maxTokens = maxTokens
         self.temperature = temperature
@@ -28,6 +33,7 @@ public struct STTGenerateParameters: Sendable {
         self.language = language
         self.chunkDuration = chunkDuration
         self.minChunkDuration = minChunkDuration
+        self.initialPrompt = initialPrompt
     }
 }
 

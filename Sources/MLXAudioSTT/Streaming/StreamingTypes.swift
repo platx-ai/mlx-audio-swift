@@ -60,6 +60,8 @@ public struct StreamingConfig: Sendable {
     public var maxDecodeWindows: Int
     /// Whether to run a one-shot decode on each completed 8s window for accuracy
     public var finalizeCompletedWindows: Bool
+    /// Optional initial prompt to bias decoding toward specific terms (hotwords, proper nouns, etc.)
+    public var initialPrompt: String?
 
     public init(
         decodeIntervalSeconds: Double = 1.0,
@@ -74,7 +76,8 @@ public struct StreamingConfig: Sendable {
         minAgreementPasses: Int = 2,
         boundaryMinAgreementPasses: Int = 3,
         maxDecodeWindows: Int = 1,
-        finalizeCompletedWindows: Bool = true
+        finalizeCompletedWindows: Bool = true,
+        initialPrompt: String? = nil
     ) {
         self.decodeIntervalSeconds = decodeIntervalSeconds
         self.boundaryDecodeIntervalSeconds = boundaryDecodeIntervalSeconds
@@ -89,6 +92,7 @@ public struct StreamingConfig: Sendable {
         self.boundaryMinAgreementPasses = boundaryMinAgreementPasses
         self.maxDecodeWindows = maxDecodeWindows
         self.finalizeCompletedWindows = finalizeCompletedWindows
+        self.initialPrompt = initialPrompt
     }
 }
 

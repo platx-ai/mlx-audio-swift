@@ -1040,12 +1040,9 @@ public class Qwen3ASRModel: Module {
         let supportedLower = Dictionary(uniqueKeysWithValues: supported.map { ($0.lowercased(), $0) })
         let langName = supportedLower[language.lowercased()] ?? language
 
-        var systemContent = ""
-        if let initialPrompt, !initialPrompt.isEmpty {
-            // Place hotword hints in the system prompt to bias decoding
-            // without disrupting the assistant's <asr_text> generation.
-            systemContent = "The following terms may appear in the audio: \(initialPrompt)"
-        }
+        // initialPrompt is placed verbatim into the system section.
+        // Callers control the exact phrasing to allow experimentation.
+        let systemContent = initialPrompt ?? ""
 
         let prompt = "<|im_start|>system\n\(systemContent)<|im_end|>\n"
             + "<|im_start|>user\n<|audio_start|>"
@@ -1103,6 +1100,10 @@ public class Qwen3ASRModel: Module {
         eval(logits)
 
         var generatedTokens: [Int] = []
+        // Repetition detection: if a token pattern repeats consecutively, stop early.
+        // This prevents infinite loops like "飞书, 飞书, 飞书, ..." that waste 30+ seconds.
+        let repetitionWindowSize = 8  // check last N tokens for repeating pattern
+        let maxRepetitions = 3        // stop after pattern repeats this many times
 
         for _ in 0..<maxTokens {
             var lastLogits = logits[0..., -1, 0...]
@@ -1116,6 +1117,26 @@ public class Qwen3ASRModel: Module {
             }
 
             generatedTokens.append(nextToken)
+
+            // Check for repetition loop
+            if generatedTokens.count >= repetitionWindowSize * maxRepetitions {
+                let tail = generatedTokens.suffix(repetitionWindowSize * maxRepetitions)
+                let pattern = Array(tail.prefix(repetitionWindowSize))
+                var isRepeating = true
+                for r in 1..<maxRepetitions {
+                    let segment = Array(tail.dropFirst(r * repetitionWindowSize).prefix(repetitionWindowSize))
+                    if segment != pattern {
+                        isRepeating = false
+                        break
+                    }
+                }
+                if isRepeating {
+                    // Trim to just one occurrence of the pattern
+                    let trimCount = repetitionWindowSize * (maxRepetitions - 1)
+                    generatedTokens.removeLast(trimCount)
+                    break
+                }
+            }
 
             let nextTokenArray = MLXArray([Int32(nextToken)]).expandedDimensions(axis: 0)
             logits = callAsFunction(inputIds: nextTokenArray, cache: cache)

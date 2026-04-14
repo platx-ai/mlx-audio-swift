@@ -87,6 +87,10 @@ let package = Package(
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
                 .product(name: "HuggingFace", package: "swift-huggingface"),
+                // Tokenizers used to be re-exported transitively through
+                // MLXLMCommon, but mlx-swift-lm#118 decoupled it. Declare it
+                // explicitly so this target keeps building on current main.
+                .product(name: "Transformers", package: "swift-transformers"),
             ],
             path: "Sources/MLXAudioCodecs"
         ),
